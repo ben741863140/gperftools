@@ -67,6 +67,28 @@ PageHeap::PageHeap()
   }
 }
 
+void PageHeap::PushList(Span* span) {
+  bool flag = true;
+  if (GetDescriptor(span->start - 1) != NULL)
+    span->left = GetDescriptor(span->start - 1)->start;
+  else
+    span->left = -1;
+  if (GetDescriptor(span->start + span->length) != NULL)
+    span->right = GetDescriptor(span->start + span->length)->start;
+  else
+    span->right = -1;
+  for (int i = 0; i < stats_.span_length; ++i) {
+    if (stats_.span_list[i].start == span->start) {
+      stats_.span_list[i] = *span;
+      flag = false;
+      break;
+    }
+  }
+  if (flag) {
+    stats_.span_list[stats_.span_length++] = *span;
+  }
+}
+
 Span* PageHeap::SearchFreeAndLargeLists(Length n) {
   ASSERT(Check());
   ASSERT(n > 0);
@@ -148,11 +170,13 @@ Span* PageHeap::Split(Span* span, Length n) {
   ASSERT(span->location == Span::IN_USE);
   ASSERT(span->sizeclass == 0);
   Event(span, 'T', n);
-
+  PushList(span);
   const int extra = span->length - n;
   Span* leftover = NewSpan(span->start + n, extra);
   ASSERT(leftover->location == Span::IN_USE);
   Event(leftover, 'U', extra);
+  //stats_.span_list[leftover->start] = *leftover;
+  PushList(leftover);
   RecordSpan(leftover);
   pagemap_.set(span->start + n - 1, span); // Update map from pageid to span
   span->length = n;
@@ -167,6 +191,8 @@ Span* PageHeap::Carve(Span* span, Length n) {
   RemoveFromFreeList(span);
   span->location = Span::IN_USE;
   Event(span, 'A', n);
+  PushList(span);
+  //stats_.span_list[span->start] = *span;
 
   const int extra = span->length - n;
   ASSERT(extra >= 0);
@@ -174,6 +200,8 @@ Span* PageHeap::Carve(Span* span, Length n) {
     Span* leftover = NewSpan(span->start + n, extra);
     leftover->location = old_location;
     Event(leftover, 'S', extra);
+  PushList(leftover);
+    //stats_.span_list[leftover->start] = *leftover;
     RecordSpan(leftover);
     PrependToFreeList(leftover);  // Skip coalescing - no candidates possible
     span->length = n;
@@ -194,6 +222,8 @@ void PageHeap::Delete(Span* span) {
   span->sample = 0;
   span->location = Span::ON_NORMAL_FREELIST;
   Event(span, 'D', span->length);
+  PushList(span);
+  //stats_.span_list[span->start] = *span;
   MergeIntoFreeList(span);  // Coalesces if possible
   IncrementalScavenge(n);
   ASSERT(Check());
@@ -222,6 +252,8 @@ void PageHeap::MergeIntoFreeList(Span* span) {
     span->length += len;
     pagemap_.set(span->start, span);
     Event(span, 'L', len);
+  PushList(span);
+    //stats_.span_list[span->start] = *span;
   }
   Span* next = GetDescriptor(p+n);
   if (next != NULL && next->location == span->location) {
@@ -233,6 +265,8 @@ void PageHeap::MergeIntoFreeList(Span* span) {
     span->length += len;
     pagemap_.set(span->start + span->length - 1, span);
     Event(span, 'R', len);
+  PushList(span);
+    //stats_.span_list[span->start] = *span;
   }
 
   PrependToFreeList(span);
@@ -271,7 +305,6 @@ void PageHeap::IncrementalScavenge(Length n) {
     scavenge_counter_ = kDefaultReleaseDelay;
     return;
   }
-
   Length released_pages = ReleaseAtLeastNPages(1);
 
   if (released_pages == 0) {
@@ -279,6 +312,7 @@ void PageHeap::IncrementalScavenge(Length n) {
     scavenge_counter_ = kDefaultReleaseDelay;
   } else {
     // Compute how long to wait until we return memory.
+stats_.cnt_inc++;
     // FLAGS_tcmalloc_release_rate==1 means wait for 1000 pages
     // after releasing one page.
     const double mult = 1000.0 / rate;
@@ -292,6 +326,7 @@ void PageHeap::IncrementalScavenge(Length n) {
 }
 
 Length PageHeap::ReleaseLastNormalSpan(SpanList* slist) {
+stats_.cnt_del++;
   Span* s = slist->normal.prev;
   ASSERT(s->location == Span::ON_NORMAL_FREELIST);
   RemoveFromFreeList(s);
@@ -336,6 +371,7 @@ void PageHeap::RegisterSizeClass(Span* span, size_t sc) {
   ASSERT(GetDescriptor(span->start) == span);
   ASSERT(GetDescriptor(span->start+span->length-1) == span);
   Event(span, 'C', sc);
+  PushList(span);
   span->sizeclass = sc;
   for (Length i = 1; i < span->length-1; i++) {
     pagemap_.set(span->start+i, span);

@@ -38,6 +38,7 @@
 #ifdef HAVE_STDINT_H
 #include <stdint.h>                     // for uint64_t, int64_t, uint16_t
 #endif
+#include "map"
 #include <gperftools/malloc_extension.h>
 #include "base/basictypes.h"
 #include "common.h"
@@ -103,6 +104,7 @@ template <> class MapSelector<32> {
 class PERFTOOLS_DLL_DECL PageHeap {
  public:
   PageHeap();
+  void PushList(Span* span);
 
   // Allocate a run of "n" pages.  Returns zero if out of memory.
   // Caller should not pass "n == 0" -- instead, n should have
@@ -146,6 +148,10 @@ class PERFTOOLS_DLL_DECL PageHeap {
     uint64_t system_bytes;    // Total bytes allocated from system
     uint64_t free_bytes;      // Total bytes on normal freelists
     uint64_t unmapped_bytes;  // Total bytes on returned freelists
+    Span span_list[105];
+    int span_length;
+    int cnt_inc;
+    int cnt_del;
   };
   inline Stats stats() const { return stats_; }
 

@@ -52,23 +52,16 @@ struct Span {
   unsigned int  location : 2;   // Is the span on a freelist, and if so, which?
   unsigned int  sample : 1;     // Sampled object?
 
-#undef SPAN_HISTORY
-#ifdef SPAN_HISTORY
   // For debugging, we can keep a log events per span
   int nexthistory;
   char history[64];
   int value[64];
-#endif
-
+  PageID left, right;
   // What freelist the span is on: IN_USE if on none, or normal or returned
   enum { IN_USE, ON_NORMAL_FREELIST, ON_RETURNED_FREELIST };
 };
 
-#ifdef SPAN_HISTORY
-void Event(Span* span, char op, int v = 0);
-#else
-#define Event(s,o,v) ((void) 0)
-#endif
+void Event(Span* span, char op, int v);
 
 // Allocator/deallocator for spans
 Span* NewSpan(PageID p, Length len);

@@ -102,6 +102,7 @@
 #endif
 #include <stddef.h>                     // for size_t, NULL
 #include <stdlib.h>                     // for getenv
+#include <map>
 #include <string.h>                     // for strcmp, memset, strlen, etc
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>                     // for getpagesize, write, etc
@@ -377,6 +378,42 @@ static void DumpStats(TCMalloc_Printer* out, int level) {
   out->printf(
       "NOTE:  SMALL MEMORY MODEL IS IN USE, PERFORMANCE MAY SUFFER.\n");
 #endif
+  out->printf(
+      "------------------------------------------------\n");
+  for (int x = 0; x < stats.pageheap.span_length ; ++x) {
+    out->printf("The PageID of Span is: %12" PRIu64 "\n", stats.pageheap.span_list[x].start);
+    for (int i = 0; i < stats.pageheap.span_list[x].nexthistory; ++i) {
+      out->printf("    Step:%d The op:%c The length:%d\n", i, stats.pageheap.span_list[x].history[i], stats.pageheap.span_list[x].value[i]);
+    }
+    if (stats.pageheap.span_list[x].location == 0) {
+      out->printf("The Location is IN_USE\n");
+    }
+    else if (stats.pageheap.span_list[x].location == 1) {
+      out->printf("The Location is ON_NORMAL_FREELIST\n");
+    }
+    else if (stats.pageheap.span_list[x].location == 2) {
+      out->printf("The Location is ON_RETURNED_FREELIST\n");
+    }
+    if (stats.pageheap.span_list[x].left == -1) {
+      if (stats.pageheap.span_list[x].right == -1) {
+        out->printf("The left and right PageID are not exist!\n");
+      }
+      else {
+        out->printf("The left PageID is not exists!  The right PageID is: %12" PRIu64 "\n",stats.pageheap.span_list[x].right);
+      }
+    }
+    else {
+      if (stats.pageheap.span_list[x].right == -1) {
+        out->printf("The left PageID is: %12" PRIu64 "  The right PageID is not exists!\n",stats.pageheap.span_list[x].left);
+      }
+      else {
+        out->printf("The left PageID is: %12" PRIu64 "   The right PageID is: %12" PRIu64 "\n",stats.pageheap.span_list[x].left,stats.pageheap.span_list[x].right);
+      }
+    }
+  }
+  out->printf("Times of no span to release: %d\n", stats.pageheap.cnt_del - stats.pageheap.cnt_inc);
+  out->printf(
+      "------------------------------------------------\n");
   out->printf(
       "------------------------------------------------\n"
       "MALLOC:   %12" PRIu64 " (%7.1f MiB) Bytes in use by application\n"

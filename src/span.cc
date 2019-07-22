@@ -34,30 +34,28 @@
 #include "span.h"
 
 #include <string.h>                     // for NULL, memset
+#include <map>
 
 #include "internal_logging.h"  // for ASSERT
 #include "page_heap_allocator.h"  // for PageHeapAllocator
 #include "static_vars.h"       // for Static
+#include "page_heap.h"
 
 namespace tcmalloc {
 
-#ifdef SPAN_HISTORY
-void Event(Span* span, char op, int v = 0) {
+void Event(Span* span, char op, int v) {
   span->history[span->nexthistory] = op;
   span->value[span->nexthistory] = v;
   span->nexthistory++;
   if (span->nexthistory == sizeof(span->history)) span->nexthistory = 0;
 }
-#endif
 
 Span* NewSpan(PageID p, Length len) {
   Span* result = Static::span_allocator()->New();
   memset(result, 0, sizeof(*result));
   result->start = p;
   result->length = len;
-#ifdef SPAN_HISTORY
   result->nexthistory = 0;
-#endif
   return result;
 }
 
